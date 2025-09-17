@@ -108,31 +108,6 @@ jobs:
         echo "📦 Uploading new DMG: $DMG_FILE"
         gh release upload "$TAG" "$DMG_FILE" --clobber
         
-        # Update the release notes with current timestamp
-        gh release edit "$TAG" --notes "## SwiftGPT $VERSION
-
-### 🚀 What's New
-- Bug fixes and improvements
-- Performance optimizations
-- Enhanced user experience
-
-### 📥 Installation
-1. Download the DMG file below
-2. Open the DMG and drag SwiftGPT to your Applications folder  
-3. Launch SwiftGPT from Applications
-
-### 🔄 Auto-Updates
-This version supports automatic updates through Sparkle. The app will check for updates automatically.
-
-### 🔗 Update Feed
-- **Appcast URL**: https://shakthi-sagar.github.io/swiftgpt-updates/appcast.xml
-- **Repository**: https://github.com/shakthi-sagar/swiftgpt-updates
-
----
-
-**Updated**: $(date '+%B %d, %Y at %H:%M UTC')
-
-**Full Changelog**: https://github.com/shakthi-sagar/SwiftGPT/releases"
         
         echo "✅ Release $TAG updated successfully!"
         echo "📦 DMG replaced: $DMG_FILE"
