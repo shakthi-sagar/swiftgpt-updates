@@ -4,11 +4,11 @@
         <title>SwiftGPT</title>
         <item>
             <title>1.1</title>
-            <pubDate>Wed, 17 Sep 2025 19:41:27 +0530</pubDate>
+            <pubDate>Wed, 17 Sep 2025 19:52:47 +0530</pubDate>
             <sparkle:version>2</sparkle:version>
             <sparkle:shortVersionString>1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/shakthi-sagar/swiftgpt-updates/releases/download/v1.1/SwiftGPT-1.1.dmg" length="2292116" type="application/octet-stream"/>
+            <enclosure url="https://github.com/shakthi-sagar/swiftgpt-updates/releases/download/v1.1/SwiftGPT-1.1.dmg" length="2292079" type="application/octet-stream" sparkle:edSignature="m+vrwFFSgBOq8SNFKcRfUomGMc8rEte6cayxM2FvmJ/OziGaD5CyBZhWikBhMZ37BuLZDG2Iebw6/tUx3fuLAw=="/>
         </item>
     </channel>
 </rss>

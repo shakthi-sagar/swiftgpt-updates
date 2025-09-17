@@ -57,8 +57,9 @@ jobs:
         
         if [ -n "$RELEASE_EXISTS" ]; then
           echo "release_exists=true" >> $GITHUB_OUTPUT
+          echo "release_id=$RELEASE_EXISTS" >> $GITHUB_OUTPUT
           echo "🔄 Release $TAG already exists (ID: $RELEASE_EXISTS)"
-          echo "ℹ️  Skipping release creation"
+          echo "ℹ️  Will update existing release with new DMG"
         else
           echo "release_exists=false" >> $GITHUB_OUTPUT
           echo "✨ Release $TAG does not exist, will create new release"
@@ -83,6 +84,61 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
+    - name: Update Existing Release
+      if: steps.find_dmg.outputs.dmg_exists == 'true' && steps.check_release.outputs.release_exists == 'true'
+      id: update_release
+      run: |
+        TAG="${{ steps.find_dmg.outputs.tag }}"
+        VERSION="${{ steps.find_dmg.outputs.version }}"
+        DMG_FILE="${{ steps.find_dmg.outputs.dmg_file }}"
+        
+        echo "🔄 Updating existing release $TAG with new DMG..."
+        
+        # First, delete the old DMG asset if it exists
+        OLD_ASSETS=$(gh release view "$TAG" --json assets --jq '.assets[].name' | grep "SwiftGPT-.*\.dmg" || echo "")
+        
+        if [ -n "$OLD_ASSETS" ]; then
+          echo "🗑️  Removing old DMG assets: $OLD_ASSETS"
+          for asset in $OLD_ASSETS; do
+            gh release delete-asset "$TAG" "$asset" --yes || echo "Asset $asset not found or already deleted"
+          done
+        fi
+        
+        # Upload the new DMG
+        echo "📦 Uploading new DMG: $DMG_FILE"
+        gh release upload "$TAG" "$DMG_FILE" --clobber
+        
+        # Update the release notes with current timestamp
+        gh release edit "$TAG" --notes "## SwiftGPT $VERSION
+
+### 🚀 What's New
+- Bug fixes and improvements
+- Performance optimizations
+- Enhanced user experience
+
+### 📥 Installation
+1. Download the DMG file below
+2. Open the DMG and drag SwiftGPT to your Applications folder  
+3. Launch SwiftGPT from Applications
+
+### 🔄 Auto-Updates
+This version supports automatic updates through Sparkle. The app will check for updates automatically.
+
+### 🔗 Update Feed
+- **Appcast URL**: https://shakthi-sagar.github.io/swiftgpt-updates/appcast.xml
+- **Repository**: https://github.com/shakthi-sagar/swiftgpt-updates
+
+---
+
+**Updated**: $(date '+%B %d, %Y at %H:%M UTC')
+
+**Full Changelog**: https://github.com/shakthi-sagar/SwiftGPT/releases"
+        
+        echo "✅ Release $TAG updated successfully!"
+        echo "📦 DMG replaced: $DMG_FILE"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Summary
       run: |
         if [ "${{ steps.find_dmg.outputs.dmg_exists }}" == "false" ]; then
@@ -91,9 +147,15 @@ jobs:
           echo "📁 Current files:"
           ls -la
         elif [ "${{ steps.check_release.outputs.release_exists }}" == "true" ]; then
-          echo "ℹ️  Release v${{ steps.find_dmg.outputs.version }} already exists"
-          echo "📦 DMG: ${{ steps.find_dmg.outputs.dmg_file }}"
-          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.find_dmg.outputs.version }}"
+          if [ "${{ steps.update_release.conclusion }}" == "success" ]; then
+            echo "🔄 Release v${{ steps.find_dmg.outputs.version }} updated successfully!"
+            echo "📦 DMG replaced: ${{ steps.find_dmg.outputs.dmg_file }}"
+            echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.find_dmg.outputs.version }}"
+          else
+            echo "❌ Failed to update release v${{ steps.find_dmg.outputs.version }}"
+            echo "📦 DMG: ${{ steps.find_dmg.outputs.dmg_file }}"
+            echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.find_dmg.outputs.version }}"
+          fi
         else
           echo "✅ New release v${{ steps.find_dmg.outputs.version }} created successfully!"
           echo "📦 DMG uploaded: ${{ steps.find_dmg.outputs.dmg_file }}"
