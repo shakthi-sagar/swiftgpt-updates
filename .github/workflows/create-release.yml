@@ -1,0 +1,100 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.1, v1.2, etc.
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Get tag name
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+    - name: Get version without 'v' prefix
+      id: version
+      run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+    - name: Check if DMG exists
+      id: check_dmg
+      run: |
+        DMG_FILE="SwiftGPT-${{ steps.version.outputs.version }}.dmg"
+        if [ -f "$DMG_FILE" ]; then
+          echo "dmg_exists=true" >> $GITHUB_OUTPUT
+          echo "dmg_file=$DMG_FILE" >> $GITHUB_OUTPUT
+          echo "✅ Found DMG: $DMG_FILE"
+        else
+          echo "dmg_exists=false" >> $GITHUB_OUTPUT
+          echo "❌ DMG not found: $DMG_FILE"
+          echo "Available files:"
+          ls -la *.dmg 2>/dev/null || echo "No DMG files found"
+        fi
+        
+    - name: Create Release
+      if: steps.check_dmg.outputs.dmg_exists == 'true'
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        release_name: SwiftGPT ${{ steps.version.outputs.version }}
+        draft: false
+        prerelease: false
+        body: |
+          ## SwiftGPT ${{ steps.version.outputs.version }}
+          
+          ### 🚀 What's New
+          - Bug fixes and improvements
+          - Performance optimizations
+          - Enhanced user experience
+          
+          ### 📥 Installation
+          1. Download the DMG file below
+          2. Open the DMG and drag SwiftGPT to your Applications folder  
+          3. Launch SwiftGPT from Applications
+          
+          ### 🔄 Auto-Updates
+          This version supports automatic updates through Sparkle. The app will check for updates automatically.
+          
+          ### 🔗 Update Feed
+          - **Appcast URL**: https://shakthi-sagar.github.io/swiftgpt-updates/appcast.xml
+          - **Repository**: https://github.com/shakthi-sagar/swiftgpt-updates
+          
+          ---
+          
+          **Full Changelog**: https://github.com/shakthi-sagar/SwiftGPT/compare/v${{ steps.version.outputs.version }}...HEAD
+          
+    - name: Upload DMG to Release
+      if: steps.check_dmg.outputs.dmg_exists == 'true'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.check_dmg.outputs.dmg_file }}
+        asset_name: ${{ steps.check_dmg.outputs.dmg_file }}
+        asset_content_type: application/octet-stream
+        
+    - name: Update GitHub Pages
+      if: steps.check_dmg.outputs.dmg_exists == 'true'
+      run: |
+        echo "✅ Release created successfully!"
+        echo "📦 DMG uploaded: ${{ steps.check_dmg.outputs.dmg_file }}"
+        echo "🌐 GitHub Pages will update automatically with the new appcast.xml"
+        echo "🔗 Release URL: ${{ steps.create_release.outputs.html_url }}"
+        
+    - name: Failure notification
+      if: steps.check_dmg.outputs.dmg_exists == 'false'
+      run: |
+        echo "❌ Release creation failed!"
+        echo "💡 Make sure you have the DMG file: SwiftGPT-${{ steps.version.outputs.version }}.dmg"
+        echo "📁 Current files in repository:"
+        ls -la
+        exit 1
