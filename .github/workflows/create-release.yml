@@ -2,8 +2,8 @@ name: Create GitHub Release
 
 on:
   push:
-    tags:
-      - 'v*'  # Triggers on version tags like v1.1, v1.2, etc.
+    branches:
+      - main  # Triggers on pushes to main branch
 
 jobs:
   create-release:
@@ -13,88 +13,86 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Get tag name
-      id: tag
-      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      
-    - name: Get version without 'v' prefix
-      id: version
-      run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      
-    - name: Check if DMG exists
-      id: check_dmg
+    - name: Find DMG files and extract version
+      id: find_dmg
       run: |
-        DMG_FILE="SwiftGPT-${{ steps.version.outputs.version }}.dmg"
-        if [ -f "$DMG_FILE" ]; then
-          echo "dmg_exists=true" >> $GITHUB_OUTPUT
-          echo "dmg_file=$DMG_FILE" >> $GITHUB_OUTPUT
-          echo "✅ Found DMG: $DMG_FILE"
-        else
+        # Find all DMG files matching SwiftGPT-*.dmg pattern
+        DMG_FILES=$(ls SwiftGPT-*.dmg 2>/dev/null || echo "")
+        
+        if [ -z "$DMG_FILES" ]; then
+          echo "❌ No SwiftGPT-*.dmg files found"
           echo "dmg_exists=false" >> $GITHUB_OUTPUT
-          echo "❌ DMG not found: $DMG_FILE"
           echo "Available files:"
-          ls -la *.dmg 2>/dev/null || echo "No DMG files found"
+          ls -la
+          exit 0
         fi
         
+        # Get the first (and hopefully only) DMG file
+        DMG_FILE=$(echo "$DMG_FILES" | head -n 1)
+        echo "✅ Found DMG: $DMG_FILE"
+        
+        # Extract version from filename (SwiftGPT-1.1.dmg -> 1.1)
+        VERSION=$(echo "$DMG_FILE" | sed 's/SwiftGPT-\(.*\)\.dmg/\1/')
+        
+        echo "dmg_exists=true" >> $GITHUB_OUTPUT
+        echo "dmg_file=$DMG_FILE" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+        
+        echo "📦 DMG File: $DMG_FILE"
+        echo "🏷️  Version: $VERSION"
+        echo "🏷️  Tag: v$VERSION"
+        
+    - name: Check if release already exists
+      id: check_release
+      run: |
+        TAG="v${{ steps.find_dmg.outputs.version }}"
+        
+        # Check if release already exists
+        RELEASE_EXISTS=$(gh release view "$TAG" --json id 2>/dev/null | jq -r '.id // empty' || echo "")
+        
+        if [ -n "$RELEASE_EXISTS" ]; then
+          echo "release_exists=true" >> $GITHUB_OUTPUT
+          echo "🔄 Release $TAG already exists (ID: $RELEASE_EXISTS)"
+          echo "ℹ️  Skipping release creation"
+        else
+          echo "release_exists=false" >> $GITHUB_OUTPUT
+          echo "✨ Release $TAG does not exist, will create new release"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Create Release
-      if: steps.check_dmg.outputs.dmg_exists == 'true'
+      if: steps.find_dmg.outputs.dmg_exists == 'true' && steps.check_release.outputs.release_exists == 'false'
       id: create_release
-      uses: actions/create-release@v1
+      run: |
+        TAG="${{ steps.find_dmg.outputs.tag }}"
+        VERSION="${{ steps.find_dmg.outputs.version }}"
+        DMG_FILE="${{ steps.find_dmg.outputs.dmg_file }}"
+        
+        # Create release with GitHub CLI
+        gh release create "$TAG" "$DMG_FILE" \
+          --title "SwiftGPT $VERSION" 
+        
+        echo "✅ Release $TAG created successfully!"
+        echo "📦 DMG uploaded: $DMG_FILE"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.tag.outputs.tag }}
-        release_name: SwiftGPT ${{ steps.version.outputs.version }}
-        draft: false
-        prerelease: false
-        body: |
-          ## SwiftGPT ${{ steps.version.outputs.version }}
-          
-          ### 🚀 What's New
-          - Bug fixes and improvements
-          - Performance optimizations
-          - Enhanced user experience
-          
-          ### 📥 Installation
-          1. Download the DMG file below
-          2. Open the DMG and drag SwiftGPT to your Applications folder  
-          3. Launch SwiftGPT from Applications
-          
-          ### 🔄 Auto-Updates
-          This version supports automatic updates through Sparkle. The app will check for updates automatically.
-          
-          ### 🔗 Update Feed
-          - **Appcast URL**: https://shakthi-sagar.github.io/swiftgpt-updates/appcast.xml
-          - **Repository**: https://github.com/shakthi-sagar/swiftgpt-updates
-          
-          ---
-          
-          **Full Changelog**: https://github.com/shakthi-sagar/SwiftGPT/compare/v${{ steps.version.outputs.version }}...HEAD
-          
-    - name: Upload DMG to Release
-      if: steps.check_dmg.outputs.dmg_exists == 'true'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ steps.check_dmg.outputs.dmg_file }}
-        asset_name: ${{ steps.check_dmg.outputs.dmg_file }}
-        asset_content_type: application/octet-stream
         
-    - name: Update GitHub Pages
-      if: steps.check_dmg.outputs.dmg_exists == 'true'
+    - name: Summary
       run: |
-        echo "✅ Release created successfully!"
-        echo "📦 DMG uploaded: ${{ steps.check_dmg.outputs.dmg_file }}"
-        echo "🌐 GitHub Pages will update automatically with the new appcast.xml"
-        echo "🔗 Release URL: ${{ steps.create_release.outputs.html_url }}"
-        
-    - name: Failure notification
-      if: steps.check_dmg.outputs.dmg_exists == 'false'
-      run: |
-        echo "❌ Release creation failed!"
-        echo "💡 Make sure you have the DMG file: SwiftGPT-${{ steps.version.outputs.version }}.dmg"
-        echo "📁 Current files in repository:"
-        ls -la
-        exit 1
+        if [ "${{ steps.find_dmg.outputs.dmg_exists }}" == "false" ]; then
+          echo "❌ No DMG files found!"
+          echo "💡 Make sure you have a SwiftGPT-*.dmg file in the repository"
+          echo "📁 Current files:"
+          ls -la
+        elif [ "${{ steps.check_release.outputs.release_exists }}" == "true" ]; then
+          echo "ℹ️  Release v${{ steps.find_dmg.outputs.version }} already exists"
+          echo "📦 DMG: ${{ steps.find_dmg.outputs.dmg_file }}"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.find_dmg.outputs.version }}"
+        else
+          echo "✅ New release v${{ steps.find_dmg.outputs.version }} created successfully!"
+          echo "📦 DMG uploaded: ${{ steps.find_dmg.outputs.dmg_file }}"
+          echo "🌐 GitHub Pages will update automatically with the new appcast.xml"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.find_dmg.outputs.version }}"
+        fi
